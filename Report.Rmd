@@ -1,0 +1,193 @@
+---
+title: "Reproducible Research Course Project 1"
+author: "Samuel Chen"
+date: "2021/12/13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning = FALSE)
+```
+
+# Assignment Report\
+**Samuel Chen**\
+## Introduction\
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.\
+
+Dataset: [Activity monitoring data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip)\
+
+## Loading and preprocessing the data\
+First, loading the libraries.\
+```{r echo=TRUE}
+library(data.table)
+library(knitr)
+library(tidyverse)
+library(lubridate)
+```
+Locate, download, unzip and load the data.\
+```{r}
+fileName<-"repdata_data_activity.zip"
+fileURL<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+
+if(!file.exists(fileName)){
+  download.file(fileURL,destfile=zipFile,method="curl")
+}
+
+if(!file.exists("activity.csv")){
+  unzip(fileName)
+}
+
+ds<-fread("activity.csv")
+```
+Make some initial views of the data, along with some value type transformation.\
+```{r}
+dim(ds)
+head(ds)
+names(ds)
+summary(ds)
+str(ds)
+ds$date<-ymd(ds$date)
+```
+\
+## What is mean total number of steps taken per day?\
+1. Calculate the total number of steps taken per day\
+```{r}
+Q1<-tapply(ds$steps,ds$date,sum,na.rm=TRUE)
+Q1<-data.table(Q1)
+```
+2. If you do not understand the difference between a histogram and a barplot, research the difference between them. Make a histogram of the total number of steps taken each day.\
+```{r}
+Q1date<-unique(ds$date)
+Q1$date<-Q1date
+names(Q1)[[1]]<-"Total Steps"
+hist(Q1$`Total Steps`,xlab="Total Steps",ylab="Counts",ylim=c(0,30),
+     main="Total Steps Historgram",col="blue",labels=TRUE)
+png("Total_Steps_2.png")
+hist(Q1$`Total Steps`,xlab="Total Steps",ylab="Counts",ylim=c(0,30),
+     main="Total Steps Historgram",col="blue",labels=TRUE)
+dev.off()
+```
+3. Calculate and report the mean and median of the total number of steps taken per day\
+```{r}
+#Mean steps by date
+temp<-select(ds,date,steps)
+temp<-group_by(temp,date)
+temp<-summarise(temp,mean(steps))
+Q2<-temp
+#Median steps by date
+temp<-select(ds,date,steps)
+temp<-group_by(temp,date)
+temp<-summarise(temp,median(steps))
+Q3<-temp
+#Q3 is the result object;
+names(Q3)<-c("Date","mediansteps")
+
+Q3$meansteps<-Q2$`mean(steps)`
+head(Q3)
+```
+## What is the average daily activity pattern?\
+The 5-minute interval that, on average, contains the maximum number of steps.\
+```{r}
+Q5<-aggregate(data=ds,steps~interval,FUN="mean")
+ggplot(Q5,aes(x=`interval`,y=`steps`))+geom_line(color="red")
+intrv_maxsteps<-ceiling(max(Q5$steps))
+intrv_maxsteps
+```
+## Imputing missing values\
+1. Calculate and report the total number of missing values in the dataset.\
+```{r}
+sumNA<-sum(is.na(ds$steps))
+sumNA
+```
+2. Devise a strategy for filling in all of the missing values in the dataset. \
+The missing values will be imputed by the mean value of the interval.\
+*This strategy actually can be more complicated based on the deeper study of the data. For example, to use the mean value of the interval by weekdays and weekends could be a better alternative. However, the simpler one will be applied here.*\
+```{r}
+#This is the data table for average value of the steps by intervals.
+Q6avg<-ds 
+
+#Add a variable for the missing step records.
+Q6avg$missing<-is.na(Q6avg$steps) 
+
+#Calculate the mean steps by intervals.
+Q6avg<-aggregate(data=Q6avg,steps~interval,FUN="mean")
+
+#NA imputing
+ds_NAimputed<-ds
+for(i in 1:nrow(ds_NAimputed)){
+  if(is.na(ds_NAimputed[i,]$steps)){
+    temp_interval<-ds_NAimputed[i,]$interval
+    ds_NAimputed[i,]$steps<-Q6avg[Q6avg$interval==temp_interval,'steps']
+  }
+}
+#Checking the NA values in the new data set.
+sumNA_imputed<-sum(is.na(ds_NAimputed$steps))
+sumNA_imputed
+```
+3. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?\
+```{r}
+##Histogram of the total number of steps taken each day after missing values are imputed
+ds_NoNA_total<-aggregate(data=ds_NAimputed,steps~date,FUN="sum")
+ggplot(ds_NoNA_total,aes(x=date,y=steps))+geom_col(fill="green")+
+  xlab("Date")+ylab("Total Steps")+ggtitle("Total Number of Steps Every Day")
+png("Total_Steps_Afterimputing.png")
+ggplot(ds_NoNA_total,aes(x=date,y=steps))+geom_col(fill="green")+
+  xlab("Date")+ylab("Total Steps")+ggtitle("Total Number of Steps Every Day")
+dev.off()
+hist(ds_NoNA_total$steps,col="red",labels = TRUE, 
+     xlab = "Total Steps every day",
+     ylim=c(0,40),
+     main = "Total number of steps taken each day without missing values")
+png("Hist_Total_Steps_Afterimputing.png")
+hist(ds_NoNA_total$steps,col="red",labels = TRUE,
+     xlab = "Total Steps every day",
+     ylim=c(0,40),
+     main = "Total number of steps taken each day without missing values")
+dev.off()
+
+##Mean steps after the imputing
+mean_noNA<-mean(ds_NoNA_total$steps)
+mean_noNA
+##Median steps after the imputing
+median_noNA<-median(ds_NoNA_total$steps)
+median_noNA
+
+##To compare the mean and median steps before and after the imputing.
+mean_b4impu<-mean(Q1$`Total Steps`)
+median_b4impu<-median(Q1$`Total Steps`)
+comprs<-c(mean_b4impu,mean_noNA,median_b4impu,median_noNA)
+barplot(comprs,ylim=c(0,12000),col=comprs)
+
+```
+It turned out that the mean and the median value are increased a little after the imputing of the missing values:\
+Mean before imputing: 9354.23\
+Mean after imputing: 10749.77\
+\
+Median before imputing: 10395\
+Median after imputing: 10641\
+\
+
+## Are there differences in activity patterns between weekdays and weekends?
+```{r}
+##Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+#Add the weekday variable
+ds_NAimputed$weekday<-wday(ds_NAimputed$date,label = TRUE)
+ds_NAimputed$wdtag<-rep("",17568)
+#Add tags of "weekday" and "weekend" to all the records.
+for (i in 1:nrow(ds_NAimputed)) {
+  if (ds_NAimputed[i,]$weekday %in% c("周六","周日")) {
+    ds_NAimputed[i,]$wdtag<-"weekend"
+  }
+  else{
+    ds_NAimputed[i,]$wdtag<-"weekday"
+  }
+}
+#Calculate the average steps by intervals
+intravg<-aggregate(data=ds_NAimputed,steps~interval+wdtag,FUN="mean")
+#plots combined.
+ggplot(intravg,aes(x=interval,y=steps))+geom_line()+facet_grid(rows=vars(wdtag))
+png("comparison.png")
+ggplot(intravg,aes(x=interval,y=steps))+geom_line()+facet_grid(rows=vars(wdtag))
+dev.off()
+```
+A peak with a quite high step counts happened in an interval during the weekdays while 2 lower peaks happened in 2 intervals during the weekends, as the plot shows.
