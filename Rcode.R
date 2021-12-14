@@ -7,7 +7,7 @@ fileName<-"repdata_data_activity.zip"
 fileURL<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
 
 if(!file.exists(fileName)){
-  download.file(fileURL,destfile=zipFile,method="curl")
+  download.file(fileURL,destfile=fileName,method="curl")
 }
 
 if(!file.exists("activity.csv")){
